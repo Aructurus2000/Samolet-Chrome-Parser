@@ -143,6 +143,41 @@ async function getTotalPages() {
   return 1;
 }
 
+function createSearchButton() {
+  const searchButton = document.createElement("button");
+  searchButton.id = "apartment-search-button";
+  searchButton.textContent = "Поиск квартиры";
+  searchButton.style.cssText = `
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: #4CAF50;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+    z-index: 9999;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s;
+  `;
+
+  searchButton.addEventListener("mouseover", () => {
+    searchButton.style.backgroundColor = "#45a049";
+  });
+
+  searchButton.addEventListener("mouseout", () => {
+    searchButton.style.backgroundColor = "#4CAF50";
+  });
+
+  searchButton.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "openPopup" });
+  });
+
+  document.body.appendChild(searchButton);
+}
+
 async function searchOnCurrentPage(apartmentNumber) {
   const rows = document.querySelectorAll("tbody tr");
   let found = false;
@@ -158,11 +193,23 @@ async function searchOnCurrentPage(apartmentNumber) {
       row.style.cssText = `
         background-color: #4CAF50 !important;
         color: white !important;
+        cursor: pointer !important;
       `;
+
+      // Добавляем обработчик клика для перехода к детальной информации
+      row.addEventListener("click", () => {
+        // Находим ссылку на детальную информацию (предполагаем, что она в первой ячейке)
+        const detailLink = cells[0].querySelector("a");
+        if (detailLink) {
+          detailLink.click();
+        }
+      });
+
       row.scrollIntoView({ behavior: "smooth", block: "center" });
     } else {
       row.style.backgroundColor = "";
       row.style.color = "";
+      row.style.cursor = "";
     }
   });
 
@@ -247,6 +294,11 @@ async function filterByApartment(apartmentNumber) {
     }
   }
 }
+
+// Добавляем создание кнопки поиска при загрузке страницы
+document.addEventListener("DOMContentLoaded", () => {
+  createSearchButton();
+});
 
 // Получаем сообщение от фонового скрипта
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
