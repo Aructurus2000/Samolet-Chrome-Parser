@@ -8,7 +8,7 @@ function sleep(ms) {
 
 function removeExistingIndicator() {
   const existingIndicator = document.getElementById(
-    "apartment-search-indicator"
+      "apartment-search-indicator"
   );
   if (existingIndicator) {
     existingIndicator.remove();
@@ -42,18 +42,18 @@ function createSearchIndicator() {
 }
 
 function updateSearchIndicator(
-  message,
-  isError = false,
-  isSuccess = false,
-  showButton = false
+    message,
+    isError = false,
+    isSuccess = false,
+    showButton = false
 ) {
   if (!currentSearchIndicator) return;
 
   currentSearchIndicator.style.backgroundColor = isError
-    ? "#f44336"
-    : isSuccess
-    ? "#4CAF50"
-    : "#2196F3";
+      ? "#f44336"
+      : isSuccess
+          ? "#4CAF50"
+          : "#2196F3";
 
   // Очищаем содержимое индикатора
   currentSearchIndicator.innerHTML = "";
@@ -99,7 +99,7 @@ async function goToPage(pageNumber) {
   if (!pagination) return false;
 
   const pageButton = pagination.querySelector(
-    `.ant-pagination-item-${pageNumber}`
+      `.ant-pagination-item-${pageNumber}`
   );
   if (pageButton) {
     pageButton.click();
@@ -118,8 +118,29 @@ async function getTotalPages() {
   const pagination = document.querySelector(".ant-pagination");
   if (!pagination) return 1;
 
+  // Находим последний элемент пагинации, который содержит общее количество страниц
+  const lastPageElement = pagination.querySelector(
+      ".ant-pagination-item:last-child"
+  );
+  if (lastPageElement) {
+    return parseInt(lastPageElement.textContent);
+  }
+
+  // Если не нашли последний элемент, пробуем найти через список всех страниц
   const pages = pagination.querySelectorAll(".ant-pagination-item");
-  return pages.length > 0 ? pages.length : 1;
+  if (pages.length > 0) {
+    // Находим максимальный номер страницы
+    let maxPage = 1;
+    pages.forEach((page) => {
+      const pageNum = parseInt(page.textContent);
+      if (!isNaN(pageNum) && pageNum > maxPage) {
+        maxPage = pageNum;
+      }
+    });
+    return maxPage;
+  }
+
+  return 1;
 }
 
 async function searchOnCurrentPage(apartmentNumber) {
@@ -130,8 +151,8 @@ async function searchOnCurrentPage(apartmentNumber) {
     const cells = row.getElementsByTagName("td");
     const kvCell = cells[7];
     if (
-      kvCell &&
-      String(kvCell.textContent).trim() === String(apartmentNumber).trim()
+        kvCell &&
+        String(kvCell.textContent).trim() === String(apartmentNumber).trim()
     ) {
       found = true;
       row.style.cssText = `
@@ -158,9 +179,28 @@ async function filterByApartment(apartmentNumber) {
 
   try {
     const totalPages = await getTotalPages();
-    const startPage = 1;
+    const currentPage = await getCurrentPageNumber();
+    const checkedPages = new Set();
 
-    for (let pageNum = startPage; pageNum <= totalPages; pageNum++) {
+    // First search on current page
+    updateSearchIndicator(`Поиск на текущей странице ${currentPage}...`);
+    foundApartment = await searchOnCurrentPage(apartmentNumber);
+    checkedPages.add(currentPage);
+
+    if (foundApartment) {
+      updateSearchIndicator(
+          `Квартира ${apartmentNumber} найдена на странице ${currentPage}!`,
+          false,
+          true,
+          true
+      );
+      return;
+    }
+
+    // Then search from page 1 to last page, skipping already checked pages
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      if (checkedPages.has(pageNum)) continue;
+
       updateSearchIndicator(`Поиск на странице ${pageNum} из ${totalPages}...`);
 
       const pageChanged = await goToPage(pageNum);
@@ -170,13 +210,14 @@ async function filterByApartment(apartmentNumber) {
       }
 
       foundApartment = await searchOnCurrentPage(apartmentNumber);
+      checkedPages.add(pageNum);
 
       if (foundApartment) {
         updateSearchIndicator(
-          `Квартира ${apartmentNumber} найдена на странице ${pageNum}!`,
-          false,
-          true,
-          true
+            `Квартира ${apartmentNumber} найдена на странице ${pageNum}!`,
+            false,
+            true,
+            true
         );
         break;
       }
@@ -186,10 +227,10 @@ async function filterByApartment(apartmentNumber) {
 
     if (!foundApartment) {
       updateSearchIndicator(
-        `Квартира ${apartmentNumber} не найдена. Попробуйте поискать другой номер.`,
-        true,
-        false,
-        true
+          `Квартира ${apartmentNumber} не найдена. Попробуйте поискать другой номер.`,
+          true,
+          false,
+          true
       );
     }
   } catch (error) {
