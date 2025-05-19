@@ -8,7 +8,7 @@ function sleep(ms) {
 
 function removeExistingIndicator() {
   const existingIndicator = document.getElementById(
-    "apartment-search-indicator"
+      "apartment-search-indicator"
   );
   if (existingIndicator) {
     existingIndicator.remove();
@@ -42,18 +42,18 @@ function createSearchIndicator() {
 }
 
 function updateSearchIndicator(
-  message,
-  isError = false,
-  isSuccess = false,
-  showButton = false
+    message,
+    isError = false,
+    isSuccess = false,
+    showButton = false
 ) {
   if (!currentSearchIndicator) return;
 
   currentSearchIndicator.style.backgroundColor = isError
-    ? "#f44336"
-    : isSuccess
-    ? "#4CAF50"
-    : "#2196F3";
+      ? "#f44336"
+      : isSuccess
+          ? "#4CAF50"
+          : "#2196F3";
 
   // Очищаем содержимое индикатора
   currentSearchIndicator.innerHTML = "";
@@ -99,7 +99,7 @@ async function goToPage(pageNumber) {
   if (!pagination) return false;
 
   const pageButton = pagination.querySelector(
-    `.ant-pagination-item-${pageNumber}`
+      `.ant-pagination-item-${pageNumber}`
   );
   if (pageButton) {
     pageButton.click();
@@ -120,7 +120,7 @@ async function getTotalPages() {
 
   // Находим последний элемент пагинации, который содержит общее количество страниц
   const lastPageElement = pagination.querySelector(
-    ".ant-pagination-item:last-child"
+      ".ant-pagination-item:last-child"
   );
   if (lastPageElement) {
     return parseInt(lastPageElement.textContent);
@@ -144,13 +144,21 @@ async function getTotalPages() {
 }
 
 function createSearchButton() {
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.cssText = `
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9999;
+  `;
+
   const searchButton = document.createElement("button");
   searchButton.id = "apartment-search-button";
   searchButton.textContent = "Поиск квартиры";
   searchButton.style.cssText = `
-    position: fixed;
-    top: 10px;
-    left: 10px;
     background: #4CAF50;
     color: white;
     padding: 10px 15px;
@@ -158,7 +166,21 @@ function createSearchButton() {
     border-radius: 4px;
     cursor: pointer;
     font-family: Arial, sans-serif;
-    z-index: 9999;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s;
+  `;
+
+  const gotoButton = document.createElement("button");
+  gotoButton.id = "apartment-goto-button";
+  gotoButton.textContent = "Переход к квартире";
+  gotoButton.style.cssText = `
+    background: #2196F3;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     transition: background-color 0.3s;
   `;
@@ -171,14 +193,28 @@ function createSearchButton() {
     searchButton.style.backgroundColor = "#4CAF50";
   });
 
-  searchButton.addEventListener("click", () => {
-    chrome.runtime.sendMessage({ action: "openPopup" });
+  gotoButton.addEventListener("mouseover", () => {
+    gotoButton.style.backgroundColor = "#1976D2";
   });
 
-  document.body.appendChild(searchButton);
+  gotoButton.addEventListener("mouseout", () => {
+    gotoButton.style.backgroundColor = "#2196F3";
+  });
+
+  searchButton.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "openPopup", mode: "search" });
+  });
+
+  gotoButton.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "openPopup", mode: "goto" });
+  });
+
+  buttonContainer.appendChild(searchButton);
+  buttonContainer.appendChild(gotoButton);
+  document.body.appendChild(buttonContainer);
 }
 
-async function searchOnCurrentPage(apartmentNumber) {
+async function searchOnCurrentPage(apartmentNumber, shouldNavigate = false) {
   const rows = document.querySelectorAll("tbody tr");
   let found = false;
 
@@ -186,8 +222,8 @@ async function searchOnCurrentPage(apartmentNumber) {
     const cells = row.getElementsByTagName("td");
     const kvCell = cells[7];
     if (
-      kvCell &&
-      String(kvCell.textContent).trim() === String(apartmentNumber).trim()
+        kvCell &&
+        String(kvCell.textContent).trim() === String(apartmentNumber).trim()
     ) {
       found = true;
       row.style.cssText = `
@@ -196,42 +232,30 @@ async function searchOnCurrentPage(apartmentNumber) {
         cursor: pointer !important;
       `;
 
-      // Добавляем обработчик клика для перехода к детальной информации
-      row.addEventListener("click", async () => {
-        try {
-          // Ищем все ссылки в строке
-          const links = row.querySelectorAll("a");
-          if (links.length > 0) {
-            // Берем первую найденную ссылку
-            const detailLink = links[0];
-            console.log("Найдена ссылка:", detailLink.href);
-
-            // Программно кликаем по ссылке
-            detailLink.click();
-
-            // Если программный клик не сработал, пробуем открыть ссылку напрямую
-            if (!detailLink.href.includes(window.location.href)) {
-              window.location.href = detailLink.href;
-            }
-          } else {
-            console.log("Ссылки не найдены в строке");
-            // Пробуем найти ссылку в первой ячейке
-            const firstCell = cells[0];
-            if (firstCell) {
-              const cellLink = firstCell.querySelector("a");
-              if (cellLink) {
-                console.log("Найдена ссылка в первой ячейке:", cellLink.href);
-                cellLink.click();
-                if (!cellLink.href.includes(window.location.href)) {
-                  window.location.href = cellLink.href;
-                }
+      if (shouldNavigate) {
+        // Автоматически кликаем по строке для перехода
+        const links = row.querySelectorAll("a");
+        if (links.length > 0) {
+          const detailLink = links[0];
+          console.log("Найдена ссылка:", detailLink.href);
+          detailLink.click();
+          if (!detailLink.href.includes(window.location.href)) {
+            window.location.href = detailLink.href;
+          }
+        } else {
+          const firstCell = cells[0];
+          if (firstCell) {
+            const cellLink = firstCell.querySelector("a");
+            if (cellLink) {
+              console.log("Найдена ссылка в первой ячейке:", cellLink.href);
+              cellLink.click();
+              if (!cellLink.href.includes(window.location.href)) {
+                window.location.href = cellLink.href;
               }
             }
           }
-        } catch (error) {
-          console.error("Ошибка при переходе:", error);
         }
-      });
+      }
 
       row.scrollIntoView({ behavior: "smooth", block: "center" });
     } else {
@@ -244,7 +268,7 @@ async function searchOnCurrentPage(apartmentNumber) {
   return found;
 }
 
-async function filterByApartment(apartmentNumber) {
+async function filterByApartment(apartmentNumber, shouldNavigate = false) {
   if (isSearching) return;
   isSearching = true;
   foundApartment = false;
@@ -259,15 +283,15 @@ async function filterByApartment(apartmentNumber) {
 
     // First search on current page
     updateSearchIndicator(`Поиск на текущей странице ${currentPage}...`);
-    foundApartment = await searchOnCurrentPage(apartmentNumber);
+    foundApartment = await searchOnCurrentPage(apartmentNumber, shouldNavigate);
     checkedPages.add(currentPage);
 
     if (foundApartment) {
       updateSearchIndicator(
-        `Квартира ${apartmentNumber} найдена на странице ${currentPage}!`,
-        false,
-        true,
-        true
+          `Квартира ${apartmentNumber} найдена на странице ${currentPage}!`,
+          false,
+          true,
+          !shouldNavigate
       );
       return;
     }
@@ -284,15 +308,18 @@ async function filterByApartment(apartmentNumber) {
         break;
       }
 
-      foundApartment = await searchOnCurrentPage(apartmentNumber);
+      foundApartment = await searchOnCurrentPage(
+          apartmentNumber,
+          shouldNavigate
+      );
       checkedPages.add(pageNum);
 
       if (foundApartment) {
         updateSearchIndicator(
-          `Квартира ${apartmentNumber} найдена на странице ${pageNum}!`,
-          false,
-          true,
-          true
+            `Квартира ${apartmentNumber} найдена на странице ${pageNum}!`,
+            false,
+            true,
+            !shouldNavigate
         );
         break;
       }
@@ -302,10 +329,10 @@ async function filterByApartment(apartmentNumber) {
 
     if (!foundApartment) {
       updateSearchIndicator(
-        `Квартира ${apartmentNumber} не найдена. Попробуйте поискать другой номер.`,
-        true,
-        false,
-        true
+          `Квартира ${apartmentNumber} не найдена. Попробуйте поискать другой номер.`,
+          true,
+          false,
+          true
       );
     }
   } catch (error) {
@@ -331,6 +358,6 @@ document.addEventListener("DOMContentLoaded", () => {
 // Получаем сообщение от фонового скрипта
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "filterByApartment") {
-    filterByApartment(message.apartmentNumber);
+    filterByApartment(message.apartmentNumber, message.mode === "goto");
   }
 });
