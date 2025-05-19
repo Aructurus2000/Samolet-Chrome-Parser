@@ -1,35 +1,47 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const input = document.getElementById("apartmentNumber");
-  const button = document.getElementById("filterButton");
-  const status = document.getElementById("status");
+  // DOM элементы
+  const apartmentInput = document.getElementById("apartmentNumber");
+  const filterButton = document.getElementById("filterButton");
+  const gotoButton = document.getElementById("gotoButton");
+  const statusDiv = document.getElementById("status");
 
-  // Восстанавливаем последний поиск
+  // Восстановление последнего поиска
   chrome.storage.local.get(["lastSearch"], (result) => {
     if (result.lastSearch) {
-      input.value = result.lastSearch;
+      apartmentInput.value = result.lastSearch;
     }
   });
 
-  // Обработка нажатия Enter
-  input.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
-      button.click();
-    }
-  });
+  // Вспомогательные функции
+  function updateStatus(message, isError = false) {
+    statusDiv.textContent = message;
+    statusDiv.style.color = isError ? "#f44336" : "#666";
+  }
 
-  button.addEventListener("click", async () => {
-    const apartmentNumber = input.value.trim();
+  function disableButtons() {
+    filterButton.disabled = true;
+    gotoButton.disabled = true;
+  }
 
+  function enableButtons() {
+    filterButton.disabled = false;
+    gotoButton.disabled = false;
+  }
+
+  // Основная функция поиска
+  async function handleSearch(mode) {
+    const apartmentNumber = apartmentInput.value.trim();
     if (!apartmentNumber) {
-      status.textContent = "Пожалуйста, введите номер квартиры";
-      status.style.color = "#f44336";
+      updateStatus("Введите номер квартиры", true);
       return;
     }
 
-    // Сохраняем последний поиск
+    // Сохранение поиска
     chrome.storage.local.set({ lastSearch: apartmentNumber });
 
-    // Получаем активную вкладку
+    disableButtons();
+    updateStatus("Поиск...");
+
     try {
       const [tab] = await chrome.tabs.query({
         active: true,
@@ -37,28 +49,33 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (!tab.url.includes("control.samoletgroup.ru")) {
-        status.textContent = "Откройте сайт control.samoletgroup.ru";
-        status.style.color = "#f44336";
+        updateStatus("Откройте сайт control.samoletgroup.ru", true);
+        enableButtons();
         return;
       }
 
-      button.disabled = true;
-      status.textContent = "Поиск...";
-      status.style.color = "#4CAF50";
-
-      // Отправляем сообщение в content script
       await chrome.tabs.sendMessage(tab.id, {
         action: "filterByApartment",
         apartmentNumber,
+        mode,
       });
 
-      // Закрываем popup
+      // Закрываем popup после успешного поиска
       window.close();
     } catch (error) {
-      console.error("Ошибка:", error);
-      status.textContent = "Произошла ошибка. Попробуйте обновить страницу.";
-      status.style.color = "#f44336";
-      button.disabled = false;
+      console.error("Error:", error);
+      updateStatus("Ошибка при поиске", true);
+      enableButtons();
+    }
+  }
+
+  // Обработчики событий
+  filterButton.addEventListener("click", () => handleSearch("search"));
+  gotoButton.addEventListener("click", () => handleSearch("goto"));
+
+  apartmentInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      handleSearch("search");
     }
   });
 });

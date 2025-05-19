@@ -3,14 +3,20 @@
   "name": "Квартирный Фильтр",
   "version": "1.0",
   "description": "Автоматическая фильтрация по номеру квартиры",
-  "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["https://control.samoletgroup.ru/*"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://control.samoletgroup.ru/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "background": {
@@ -19,6 +25,7 @@
   "content_scripts": [
     {
       "matches": ["https://control.samoletgroup.ru/*"],
+      "css": ["styles/content.css"],
       "js": ["content.js"]
     }
   ]
