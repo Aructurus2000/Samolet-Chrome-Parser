@@ -9,11 +9,13 @@
 </head>
 
 <body>
-    <div class="container">
-        <input type="text" id="apartmentNumber" placeholder="Введите номер квартиры" autofocus>
-        <button id="filterButton" class="button button-primary">Найти квартиру</button>
+    <div class="container" style="font-size: 12.5pt;">
+        <input type="text" id="apartmentNumber" placeholder="Введите номер(а) квартиры через запятую" autofocus>
+        <div id="lastInput" class="last-input"
+            style="display: flex; align-items: center; gap: 8px; background: #e3f2fd; border-radius: 6px; padding: 6px 10px; margin-top: 2px; font-size: 13px; color: #1565c0; min-height: 32px; position: relative;">
+        </div>
+        <button id="filterButton" class="button button-primary" style="margin-top: 12px;">Найти</button>
         <button id="gotoButton" class="button button-secondary">Переход к квартире</button>
-        <button id="multipleSearchButton" class="button button-secondary">Множественный поиск</button>
         <div id="status" class="status"></div>
     </div>
 
