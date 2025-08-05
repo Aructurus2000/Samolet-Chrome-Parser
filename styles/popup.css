@@ -33,30 +33,32 @@ input:focus {
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
+  background-color: #1976d2;
   transition: background-color 0.3s;
 }
 
 .button:disabled {
-  background-color: #cccccc;
+  background-color: #90caf9;
   cursor: not-allowed;
 }
 
 /* Стили для кнопки поиска */
 .button-primary {
-  background-color: #4caf50;
+  background-color: #1976d2;
 }
 
-.button-primary:hover:not(:disabled) {
-  background-color: #45a049;
+.button-primary:hover:not(:disabled),
+.button:hover:not(:disabled) {
+  background-color: #0d47a1;
 }
 
 /* Стили для кнопки перехода */
 .button-secondary {
-  background-color: #2196f3;
+  background-color: #1976d2;
 }
 
 .button-secondary:hover:not(:disabled) {
-  background-color: #1976d2;
+  background-color: #0d47a1;
 }
 
 /* Стили для статуса */
