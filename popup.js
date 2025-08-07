@@ -1,27 +1,27 @@
 document.addEventListener("DOMContentLoaded", () => {
+  // DOM элементы
   const apartmentInput = document.getElementById("apartmentNumber");
   const filterButton = document.getElementById("filterButton");
   const gotoButton = document.getElementById("gotoButton");
   const statusDiv = document.getElementById("status");
+  const multipleSearchButton = document.getElementById("multipleSearchButton");
+  const multipleSearchModal = document.getElementById("multipleSearchModal");
+  const closeModal = document.querySelector(".close");
+  const multipleApartments = document.getElementById("multipleApartments");
+  const searchMultipleButton = document.getElementById("searchMultipleButton");
   const lastInputDiv = document.getElementById("lastInput");
 
+  // При загрузке показываем последний ввод в отдельном блоке с кнопкой 'Повторить'
   function renderLastInput(value) {
-    if (!value) {
+    if (value) {
+      lastInputDiv.innerHTML = `<span style=\"font-size:11.5pt;font-weight:normal;\">Последний ввод:</span> <span class=\"last-input-value\" style=\"font-size:11.5pt;font-weight:bold;\">${value}</span> <button id=\"repeatLastInput\" style=\"position:absolute;top:0;right:0;height:100%;border-radius:0 6px 6px 0;padding:0 16px;font-size:12px;background:#1976d2;color:#fff;border:none;cursor:pointer;\">Повторить</button>`;
+      document.getElementById("repeatLastInput").onclick = function () {
+        apartmentInput.value = value;
+        apartmentInput.focus();
+      };
+    } else {
       lastInputDiv.textContent = "";
-      return;
     }
-    lastInputDiv.innerHTML = `
-      <span style="font-size:11.5pt;">Последний ввод:</span> 
-      <span class="last-input-value" style="font-weight:bold;">${value}</span> 
-      <button id="repeatLastInput" style="
-        position:absolute; top:0; right:0; height:100%; border-radius:0 6px 6px 0; padding:0 16px; 
-        font-size:12px; background:#1976d2; color:#fff; border:none; cursor:pointer;">
-        Повторить
-      </button>`;
-    document.getElementById("repeatLastInput").onclick = () => {
-      apartmentInput.value = value;
-      apartmentInput.focus();
-    };
   }
 
   chrome.storage.local.get(["lastSearch"], (result) => {
@@ -33,20 +33,192 @@ document.addEventListener("DOMContentLoaded", () => {
     renderLastInput(value);
   }
 
+  // Вспомогательные функции
   function updateStatus(message, isError = false) {
     statusDiv.textContent = message;
     statusDiv.style.color = isError ? "#f44336" : "#666";
   }
 
-  function setButtonsDisabled(disabled) {
-    filterButton.disabled = disabled;
-    gotoButton.disabled = disabled;
+  function disableButtons() {
+    filterButton.disabled = true;
   }
 
-  async function sendMessage(action, payload = {}) {
-    setButtonsDisabled(true);
-    updateStatus("Обработка...");
+  function enableButtons() {
+    filterButton.disabled = false;
+  }
 
+  // Modal functions
+  function openModal() {
+    multipleSearchModal.style.display = "block";
+  }
+
+  function closeModalWindow() {
+    multipleSearchModal.style.display = "none";
+  }
+
+  // Основная функция поиска
+  async function handleSearch(mode) {
+    const apartmentNumber = apartmentInput.value.trim();
+    if (!apartmentNumber) {
+      updateStatus("Введите номер квартиры", true);
+      return;
+    }
+
+    disableButtons();
+    updateStatus("Поиск...");
+
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      if (!tab.url.includes("control.samoletgroup.ru")) {
+        updateStatus("Откройте сайт control.samoletgroup.ru", true);
+        enableButtons();
+        return;
+      }
+
+      await chrome.tabs.sendMessage(tab.id, {
+        action: "filterByApartment",
+        apartmentNumber,
+        mode,
+      });
+
+      // Закрываем popup после успешного поиска
+      window.close();
+    } catch (error) {
+      console.error("Error:", error);
+      updateStatus("Ошибка при поиске", true);
+      enableButtons();
+    }
+  }
+
+  // Multiple search function
+  async function handleMultipleSearch() {
+    const apartmentNumbers = multipleApartments.value
+      .split(",")
+      .map((num) => num.trim())
+      .filter((num) => num !== "");
+
+    if (apartmentNumbers.length === 0) {
+      updateStatus("Введите хотя бы один номер квартиры", true);
+      return;
+    }
+
+    disableButtons();
+    updateStatus("Поиск...");
+
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      if (!tab.url.includes("control.samoletgroup.ru")) {
+        updateStatus("Откройте сайт control.samoletgroup.ru", true);
+        enableButtons();
+        return;
+      }
+
+      // Send message to content script to handle multiple apartments
+      await chrome.tabs.sendMessage(tab.id, {
+        action: "filterMultipleApartments",
+        apartmentNumbers,
+      });
+
+      // Close modal and popup
+      closeModalWindow();
+      window.close();
+    } catch (error) {
+      console.error("Error:", error);
+      updateStatus("Ошибка при поиске", true);
+      enableButtons();
+    }
+  }
+
+  // Обработчики событий
+  filterButton.addEventListener("click", async () => {
+    const input = apartmentInput.value.trim();
+    if (!input) {
+      updateStatus("Введите номер квартиры", true);
+      return;
+    }
+    const apartmentNumbers = input
+      .split(",")
+      .map((num) => num.trim())
+      .filter((num) => num !== "");
+    saveAndShowLastInput(input);
+    if (apartmentNumbers.length === 1) {
+      // Обычный поиск
+      disableButtons();
+      updateStatus("Поиск...");
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab.url.includes("control.samoletgroup.ru")) {
+          updateStatus("Откройте сайт control.samoletgroup.ru", true);
+          enableButtons();
+          return;
+        }
+        await chrome.tabs.sendMessage(tab.id, {
+          action: "filterByApartment",
+          apartmentNumber: apartmentNumbers[0],
+          mode: "search",
+        });
+        window.close();
+      } catch (error) {
+        console.error("Error:", error);
+        updateStatus("Ошибка при поиске", true);
+        enableButtons();
+      }
+    } else if (apartmentNumbers.length > 1) {
+      // Множественный поиск
+      disableButtons();
+      updateStatus("Поиск...");
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab.url.includes("control.samoletgroup.ru")) {
+          updateStatus("Откройте сайт control.samoletgroup.ru", true);
+          enableButtons();
+          return;
+        }
+        await chrome.tabs.sendMessage(tab.id, {
+          action: "filterMultipleApartments",
+          apartmentNumbers,
+        });
+        window.close();
+      } catch (error) {
+        console.error("Error:", error);
+        updateStatus("Ошибка при поиске", true);
+        enableButtons();
+      }
+    }
+  });
+
+  // Обработчик для кнопки 'Переход к квартире'
+  gotoButton.addEventListener("click", async () => {
+    const input = apartmentInput.value.trim();
+    if (!input) {
+      updateStatus("Введите номер квартиры", true);
+      return;
+    }
+    const apartmentNumbers = input
+      .split(",")
+      .map((num) => num.trim())
+      .filter((num) => num !== "");
+    saveAndShowLastInput(input);
+    if (apartmentNumbers.length !== 1) {
+      updateStatus("Для перехода укажите только один номер квартиры", true);
+      return;
+    }
+    disableButtons();
+    updateStatus("Переход...");
     try {
       const [tab] = await chrome.tabs.query({
         active: true,
@@ -54,77 +226,35 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       if (!tab.url.includes("control.samoletgroup.ru")) {
         updateStatus("Откройте сайт control.samoletgroup.ru", true);
-        setButtonsDisabled(false);
-        return false;
+        enableButtons();
+        return;
       }
-      await chrome.tabs.sendMessage(tab.id, { action, ...payload });
-      return true;
-    } catch (e) {
-      console.error("Ошибка:", e);
-      updateStatus("Ошибка при обработке", true);
-      setButtonsDisabled(false);
-      return false;
-    }
-  }
-
-  async function handleFilter() {
-    const input = apartmentInput.value.trim();
-    if (!input) {
-      updateStatus("Введите номер квартиры", true);
-      return;
-    }
-    const apartmentNumbers = input
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    saveAndShowLastInput(input);
-
-    if (apartmentNumbers.length === 1) {
-      if (
-        await sendMessage("filterByApartment", {
-          apartmentNumber: apartmentNumbers[0],
-          mode: "search",
-        })
-      ) {
-        window.close();
-      }
-    } else {
-      if (await sendMessage("filterMultipleApartments", { apartmentNumbers })) {
-        window.close();
-      }
-    }
-  }
-
-  async function handleGoto() {
-    const input = apartmentInput.value.trim();
-    if (!input) {
-      updateStatus("Введите номер квартиры", true);
-      return;
-    }
-    const apartmentNumbers = input
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (apartmentNumbers.length !== 1) {
-      updateStatus("Для перехода укажите только один номер квартиры", true);
-      return;
-    }
-    saveAndShowLastInput(input);
-
-    if (
-      await sendMessage("filterByApartment", {
+      await chrome.tabs.sendMessage(tab.id, {
+        action: "filterByApartment",
         apartmentNumber: apartmentNumbers[0],
         mode: "goto",
-      })
-    ) {
+      });
       window.close();
+    } catch (error) {
+      console.error("Error:", error);
+      updateStatus("Ошибка при переходе", true);
+      enableButtons();
     }
-  }
+  });
 
-  filterButton.addEventListener("click", handleFilter);
-  gotoButton.addEventListener("click", handleGoto);
+  closeModal.addEventListener("click", closeModalWindow);
+  searchMultipleButton.addEventListener("click", handleMultipleSearch);
 
   apartmentInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") filterButton.click();
+    if (e.key === "Enter") {
+      filterButton.click();
+    }
+  });
+
+  // Close modal when clicking outside
+  window.addEventListener("click", (e) => {
+    if (e.target === multipleSearchModal) {
+      closeModalWindow();
+    }
   });
 });
