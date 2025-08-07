@@ -9,13 +9,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeModal = document.querySelector(".close");
   const multipleApartments = document.getElementById("multipleApartments");
   const searchMultipleButton = document.getElementById("searchMultipleButton");
+  const lastInputDiv = document.getElementById("lastInput");
 
-  // Восстановление последнего поиска
-  chrome.storage.local.get(["lastSearch"], (result) => {
-    if (result.lastSearch) {
-      apartmentInput.value = result.lastSearch;
+  // При загрузке показываем последний ввод в отдельном блоке с кнопкой 'Повторить'
+  function renderLastInput(value) {
+    if (value) {
+      lastInputDiv.innerHTML = `<span style=\"font-size:11.5pt;font-weight:normal;\">Последний ввод:</span> <span class=\"last-input-value\" style=\"font-size:11.5pt;font-weight:bold;\">${value}</span> <button id=\"repeatLastInput\" style=\"position:absolute;top:0;right:0;height:100%;border-radius:0 6px 6px 0;padding:0 16px;font-size:12px;background:#1976d2;color:#fff;border:none;cursor:pointer;\">Повторить</button>`;
+      document.getElementById("repeatLastInput").onclick = function () {
+        apartmentInput.value = value;
+        apartmentInput.focus();
+      };
+    } else {
+      lastInputDiv.textContent = "";
     }
+  }
+
+  chrome.storage.local.get(["lastSearch"], (result) => {
+    renderLastInput(result.lastSearch);
   });
+
+  function saveAndShowLastInput(value) {
+    chrome.storage.local.set({ lastSearch: value });
+    renderLastInput(value);
+  }
 
   // Вспомогательные функции
   function updateStatus(message, isError = false) {
@@ -25,14 +41,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function disableButtons() {
     filterButton.disabled = true;
-    gotoButton.disabled = true;
-    multipleSearchButton.disabled = true;
   }
 
   function enableButtons() {
     filterButton.disabled = false;
-    gotoButton.disabled = false;
-    multipleSearchButton.disabled = false;
   }
 
   // Modal functions
@@ -51,9 +63,6 @@ document.addEventListener("DOMContentLoaded", () => {
       updateStatus("Введите номер квартиры", true);
       return;
     }
-
-    // Сохранение поиска
-    chrome.storage.local.set({ lastSearch: apartmentNumber });
 
     disableButtons();
     updateStatus("Поиск...");
@@ -129,37 +138,116 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Обработчики событий
-  filterButton.addEventListener("click", () => handleSearch("search"));
-  gotoButton.addEventListener("click", () => handleSearch("goto"));
-  multipleSearchButton.addEventListener("click", async () => {
+  filterButton.addEventListener("click", async () => {
+    const input = apartmentInput.value.trim();
+    if (!input) {
+      updateStatus("Введите номер квартиры", true);
+      return;
+    }
+    const apartmentNumbers = input
+      .split(",")
+      .map((num) => num.trim())
+      .filter((num) => num !== "");
+    saveAndShowLastInput(input);
+    if (apartmentNumbers.length === 1) {
+      // Обычный поиск
+      disableButtons();
+      updateStatus("Поиск...");
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab.url.includes("control.samoletgroup.ru")) {
+          updateStatus("Откройте сайт control.samoletgroup.ru", true);
+          enableButtons();
+          return;
+        }
+        await chrome.tabs.sendMessage(tab.id, {
+          action: "filterByApartment",
+          apartmentNumber: apartmentNumbers[0],
+          mode: "search",
+        });
+        window.close();
+      } catch (error) {
+        console.error("Error:", error);
+        updateStatus("Ошибка при поиске", true);
+        enableButtons();
+      }
+    } else if (apartmentNumbers.length > 1) {
+      // Множественный поиск
+      disableButtons();
+      updateStatus("Поиск...");
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab.url.includes("control.samoletgroup.ru")) {
+          updateStatus("Откройте сайт control.samoletgroup.ru", true);
+          enableButtons();
+          return;
+        }
+        await chrome.tabs.sendMessage(tab.id, {
+          action: "filterMultipleApartments",
+          apartmentNumbers,
+        });
+        window.close();
+      } catch (error) {
+        console.error("Error:", error);
+        updateStatus("Ошибка при поиске", true);
+        enableButtons();
+      }
+    }
+  });
+
+  // Обработчик для кнопки 'Переход к квартире'
+  gotoButton.addEventListener("click", async () => {
+    const input = apartmentInput.value.trim();
+    if (!input) {
+      updateStatus("Введите номер квартиры", true);
+      return;
+    }
+    const apartmentNumbers = input
+      .split(",")
+      .map((num) => num.trim())
+      .filter((num) => num !== "");
+    saveAndShowLastInput(input);
+    if (apartmentNumbers.length !== 1) {
+      updateStatus("Для перехода укажите только один номер квартиры", true);
+      return;
+    }
+    disableButtons();
+    updateStatus("Переход...");
     try {
       const [tab] = await chrome.tabs.query({
         active: true,
         currentWindow: true,
       });
-
       if (!tab.url.includes("control.samoletgroup.ru")) {
         updateStatus("Откройте сайт control.samoletgroup.ru", true);
+        enableButtons();
         return;
       }
-
       await chrome.tabs.sendMessage(tab.id, {
-        action: "showMultipleSearchModal",
+        action: "filterByApartment",
+        apartmentNumber: apartmentNumbers[0],
+        mode: "goto",
       });
-
-      // Закрываем popup после отправки сообщения
       window.close();
     } catch (error) {
       console.error("Error:", error);
-      updateStatus("Ошибка при открытии окна поиска", true);
+      updateStatus("Ошибка при переходе", true);
+      enableButtons();
     }
   });
+
   closeModal.addEventListener("click", closeModalWindow);
   searchMultipleButton.addEventListener("click", handleMultipleSearch);
 
   apartmentInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter") {
-      handleSearch("search");
+      filterButton.click();
     }
   });
 

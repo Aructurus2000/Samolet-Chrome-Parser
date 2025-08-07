@@ -3,6 +3,9 @@ let isSearching = false;
 let foundApartment = false;
 let currentSearchIndicator = null;
 
+// Глобальный объект для хранения соответствия квартира -> дефект
+const defectMap = {};
+
 // Вспомогательные функции
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -25,19 +28,19 @@ function createSearchIndicator() {
     searchIndicator = document.createElement("div");
     searchIndicator.id = "apartment-search-indicator";
     searchIndicator.style.cssText = `
-      position: fixed;
+    position: fixed;
       top: 20px;
       right: 20px;
       padding: 15px;
       border-radius: 8px;
       z-index: 1000;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      color: white;
-      font-family: Arial, sans-serif;
+    color: white;
+    font-family: Arial, sans-serif;
       max-width: 400px;
-      transition: all 0.3s ease;
+    transition: all 0.3s ease;
       backdrop-filter: blur(5px);
-    `;
+  `;
     document.body.appendChild(searchIndicator);
   }
 
@@ -404,6 +407,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     modalInstance.style.display = "block";
   } else if (request.action === "filterByApartment") {
     filterByApartment(request.apartmentNumber, request.mode === "goto");
+  } else if (request.action === "filterMultipleApartments") {
+    (async () => {
+      try {
+        await handleMultipleApartments(request.apartmentNumbers);
+      } catch (e) {
+        console.error("Ошибка в handleMultipleApartments:", e);
+      }
+    })();
   }
 });
 
@@ -495,6 +506,7 @@ function createOrUpdateIndicator(message, type = "info") {
 function createOrUpdateFoundApartmentsSidebar(
   foundApartments,
   apartmentNumbers,
+  defectMap = {},
   isSearchComplete = false
 ) {
   let sidebar = document.querySelector(".found-apartments-sidebar");
@@ -583,26 +595,17 @@ function createOrUpdateFoundApartmentsSidebar(
         gap: 5px;
       }
       .found-apartments-sidebar .action-button {
-        padding: 4px 8px;
+        padding: 4px 12px;
         border: none;
         border-radius: 4px;
         cursor: pointer;
-        font-size: 12px;
-        transition: background-color 0.2s;
+        font-size: 13px;
+        background: #1976d2;
+        color: #fff;
+        transition: background 0.2s;
       }
-      .found-apartments-sidebar .view-button {
-        background: rgba(33, 150, 243, 0.9);
-        color: white;
-      }
-      .found-apartments-sidebar .view-button:hover {
-        background: rgba(25, 118, 210, 0.9);
-      }
-      .found-apartments-sidebar .copy-button {
-        background: rgba(76, 175, 80, 0.9);
-        color: white;
-      }
-      .found-apartments-sidebar .copy-button:hover {
-        background: rgba(56, 142, 60, 0.9);
+      .found-apartments-sidebar .action-button:hover {
+        background: #0d47a1;
       }
       .found-apartments-sidebar .progress {
         margin-top: 10px;
@@ -650,12 +653,10 @@ function createOrUpdateFoundApartmentsSidebar(
           <li class="apartment-item">
             <span class="apartment-number">Квартира ${apartmentNumber}</span>
             <div class="apartment-actions">
-              <button class="action-button view-button" data-apartment="${apartmentNumber}">
-                Просмотр
-              </button>
-              <button class="action-button copy-button" data-apartment="${apartmentNumber}">
-                Копировать
-              </button>
+              <button class="action-button copy-button" data-apartment="${apartmentNumber}">Копировать</button>
+              <button class="action-button goto-button" data-defect="${
+                defectMap[apartmentNumber] || ""
+              }">Перейти</button>
             </div>
           </li>
         `
@@ -685,27 +686,26 @@ function createOrUpdateFoundApartmentsSidebar(
     sidebar.classList.add("hidden");
     setTimeout(() => {
       sidebar.remove();
-    }, 300); // Ждем завершения анимации
+    }, 300);
   });
 
-  // Добавляем обработчики для кнопок
-  sidebar.querySelectorAll(".view-button").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const apartmentNumber = button.dataset.apartment;
-      await filterByApartment(apartmentNumber, true);
+  // Добавляем обработчики для кнопок 'Копировать' и 'Перейти'
+  sidebar.querySelectorAll(".copy-button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const apt = btn.getAttribute("data-apartment");
+      navigator.clipboard.writeText(apt);
     });
   });
 
-  sidebar.querySelectorAll(".copy-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const apartmentNumber = button.dataset.apartment;
-      navigator.clipboard.writeText(apartmentNumber).then(() => {
-        const originalText = button.textContent;
-        button.textContent = "Скопировано!";
-        setTimeout(() => {
-          button.textContent = originalText;
-        }, 2000);
-      });
+  sidebar.querySelectorAll(".goto-button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const defectId = btn.getAttribute("data-defect");
+      if (defectId) {
+        window.open(
+          `https://control.samoletgroup.ru/repair-defect/${defectId}/common-info`,
+          "_blank"
+        );
+      }
     });
   });
 
@@ -763,6 +763,12 @@ async function searchApartmentsOnPage(apartmentNumbers, foundApartments) {
           console.error("Ошибка при открытии вкладки с деталями:", error);
         }
       }
+
+      // --- Новый код: ищем номер дефекта ---
+      const defectSpan = row.querySelector('span[data-testid="tend-ui-text"]');
+      if (defectSpan) {
+        defectMap[apartmentNumber] = defectSpan.textContent.trim();
+      }
     }
   }
 
@@ -770,6 +776,7 @@ async function searchApartmentsOnPage(apartmentNumbers, foundApartments) {
   createOrUpdateFoundApartmentsSidebar(
     foundApartments,
     apartmentNumbers,
+    defectMap,
     false
   );
 
@@ -802,6 +809,7 @@ async function handleMultipleApartments(apartmentNumbers) {
   createOrUpdateFoundApartmentsSidebar(
     foundApartments,
     apartmentNumbers,
+    defectMap,
     false
   );
 
@@ -898,6 +906,7 @@ async function handleMultipleApartments(apartmentNumbers) {
     createOrUpdateFoundApartmentsSidebar(
       foundApartments,
       apartmentNumbers,
+      defectMap,
       true
     );
   } catch (error) {

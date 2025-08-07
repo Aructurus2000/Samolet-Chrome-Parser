@@ -17,8 +17,8 @@
 
 /* Стили для кнопки поиска снова */
 #apartment-search-indicator button {
-  background: white;
-  color: #4caf50;
+  background: #1976d2;
+  color: #fff;
   border: none;
   padding: 5px 10px;
   border-radius: 4px;
@@ -30,7 +30,13 @@
 }
 
 #apartment-search-indicator button:hover {
-  background-color: #f5f5f5;
+  background-color: #0d47a1;
+}
+
+#apartment-search-indicator button:disabled {
+  background-color: #90caf9;
+  color: #fff;
+  cursor: not-allowed;
 }
 
 /* Стили для найденной строки */
